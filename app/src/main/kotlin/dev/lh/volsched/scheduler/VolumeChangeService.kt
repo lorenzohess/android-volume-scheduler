@@ -15,7 +15,6 @@ import dev.lh.volsched.widget.VolumeWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -72,10 +71,6 @@ class VolumeChangeService : Service() {
         private const val EXTRA_REASON = "dev.lh.volsched.REASON"
         private const val CHANNEL_ID = "volume_changes"
         private const val NOTIFICATION_ID = 1
-
-        // Diagnostic for M3: a level that was set and then undone shortly
-        // afterwards shows up as a mismatch in the log.
-        private const val RECHECK_DELAY_MS = 5_000L
 
         // Generous: a job is a few seconds at most, but a leaked lock must not
         // hold the CPU awake indefinitely.
@@ -165,9 +160,6 @@ class VolumeChangeService : Service() {
                         VolumeScheduler.applyDue(context, intendedAt, retry = true)
                         VolumeScheduler.rearm(context, "after firing")
                         VolumeWidget.refresh(context)
-
-                        delay(RECHECK_DELAY_MS)
-                        VolumeScheduler.logCurrentLevels(context, "${RECHECK_DELAY_MS / 1000}s after firing")
                     }
 
                     ACTION_RECONCILE -> {

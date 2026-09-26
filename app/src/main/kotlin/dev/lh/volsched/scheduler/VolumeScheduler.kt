@@ -206,12 +206,6 @@ object VolumeScheduler {
         }
     }
 
-    /** Logs all four levels as they are right now, e.g. to catch a later revert. */
-    fun logCurrentLevels(context: Context, label: String) {
-        val levels = VolumeApplier(context).currentLevels()
-        EventLog(context).append("$label: " + levels.entries.joinToString(" ") { "${it.key}=${it.value}" })
-    }
-
     /**
      * Screen, lock, Doze, charging, Do Not Disturb and ringer state, so a change
      * that didn't stick, or arrived late, can be matched against what the phone

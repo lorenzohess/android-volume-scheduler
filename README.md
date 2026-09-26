@@ -11,7 +11,7 @@ in [notes.md](notes.md).
 | Module | State |
 |---|---|
 | `:core` | Builds and passes **55 unit tests** on the JVM |
-| `:app` | Builds and installs (Pixel 10a, Android 17). M2 verified on device: sliders are independent (ring and notification are not linked), ring/notification floor at 1, volume keys sync. M3 partly verified: alarms fire and apply with the screen on, with the screen off and locked, after a reinstall, and after a reboot before first unlock. Doze **not yet verified** - see below |
+| `:app` | Builds and installs (Pixel 10a, Android 17). M2 verified on device: sliders are independent (ring and notification are not linked), ring/notification floor at 1, volume keys sync. M3 verified: alarms fire and apply on time with the screen on, with the screen off and locked, after a reinstall, after a reboot before first unlock, and through 7 hours of deep Doze (14 of 14 firings, each delivered within 1 s). M4 and M7 import verified in passing: imported JSON schedules drove every change. Widget (M6) and export (M7) **not yet verified**; M5 not built |
 
 Treat the Android layer as a first draft until the checks under "Verifying it
 actually works" have passed on the device.
