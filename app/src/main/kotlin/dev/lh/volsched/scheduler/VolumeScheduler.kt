@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.BatteryManager
 import android.os.PowerManager
 import dev.lh.volsched.audio.ApplyResult
 import dev.lh.volsched.audio.VolumeApplier
@@ -212,11 +213,20 @@ object VolumeScheduler {
     }
 
     /**
-     * Screen, lock, Do Not Disturb and ringer state, so a change that didn't
-     * stick can be matched against what the phone was doing at the time.
+     * Screen, lock, Doze, charging, Do Not Disturb and ringer state, so a change
+     * that didn't stick, or arrived late, can be matched against what the phone
+     * was doing at the time. Doze never engages while charging, so a Doze test
+     * only counts if these lines show doze=deep or doze=light.
      */
     private fun deviceState(context: Context, applier: VolumeApplier): String {
-        val screenOn = context.getSystemService(PowerManager::class.java).isInteractive
+        val power = context.getSystemService(PowerManager::class.java)
+        val screenOn = power.isInteractive
+        val doze = when {
+            power.isDeviceIdleMode -> "deep"
+            power.isDeviceLightIdleMode -> "light"
+            else -> "off"
+        }
+        val charging = context.getSystemService(BatteryManager::class.java).isCharging
         val locked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
         val dnd = when (context.getSystemService(NotificationManager::class.java).currentInterruptionFilter) {
             NotificationManager.INTERRUPTION_FILTER_ALL -> "off"
@@ -226,6 +236,7 @@ object VolumeScheduler {
             else -> "unknown"
         }
         return "screen=${if (screenOn) "on" else "off"} locked=${if (locked) "yes" else "no"} " +
+            "doze=$doze charging=${if (charging) "yes" else "no"} " +
             "dnd=$dnd ringer=${applier.ringerModeName()}"
     }
 
