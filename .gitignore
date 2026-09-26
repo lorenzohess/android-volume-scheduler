@@ -9,3 +9,4 @@ captures/
 .cxx/
 test-schedule.json
 __pycache__/
+myschedule.json
