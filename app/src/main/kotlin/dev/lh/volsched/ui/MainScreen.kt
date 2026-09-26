@@ -51,7 +51,7 @@ private const val LOG_LINES = 60
 private val NEXT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE HH:mm")
 
 @Composable
-fun MainScreen() {
+fun MainScreen(onEditSchedule: () -> Unit) {
     val context = LocalContext.current
     val store = remember { ScheduleStore.get(context) }
     val applier = remember { VolumeApplier(context) }
@@ -185,6 +185,8 @@ fun MainScreen() {
             } ?: "No upcoming change",
             style = MaterialTheme.typography.bodyMedium,
         )
+
+        Button(onClick = onEditSchedule, enabled = store.loadError == null) { Text("Edit schedule") }
 
         HorizontalDivider()
 

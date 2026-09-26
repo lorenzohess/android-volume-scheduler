@@ -64,9 +64,26 @@ reading `AudioManager`, which is what keeps it JVM-testable.
 
 ## Editing the schedule
 
-There is no visual block editor yet (milestone M5). Until there is, author the
-schedule as JSON and pull it in with **Import** on the main screen. Start from
-`sample-schedule.json`.
+**Edit schedule** on the main screen opens the editor (milestone M5), with three
+tabs:
+
+- **Week** - pick a day to see its blocks in time order. Add a block to one or
+  several days at once, tap a block to change or delete it, or copy a whole day
+  over others. Blocks that overlap on a stream they both set are flagged.
+- **Profiles** - named sets of levels for some or all streams.
+- **Presets** - named levels per stream, such as RING Quiet = 2.
+
+Renaming a preset or profile updates everything that uses it. Deleting one is
+disabled while something still uses it. Edits apply to a draft: **Save** is
+refused while there are errors, and saving re-arms the next alarm without
+touching current volumes.
+
+JSON still works too: **Import** a file, starting from `sample-schedule.json`
+if you like, and **Export** a backup.
+
+An overlap is only a warning. A block acts when it starts; its end does
+nothing. So in the sample, Saturday's one-off MEDIA 20 from 13:00 to 16:00
+leaves media at 20 until Sleep at 23:30, not until 16:00.
 
 Import is strict: unknown keys, dangling preset or profile names, levels above
 the device maximum, two events touching the same stream in the same minute, and
@@ -123,9 +140,7 @@ Worth confirming in this order, per PLAN.md section 8:
 
 ## Remaining milestones
 
-M1-M4, M6 and M7 are implemented but unverified on device. Still to do:
-
-- **M5** - visual schedule editor (preset manager, profile builder, weekly block
-  grid with overlap warnings). JSON import covers authoring until then.
+- **M5** - the editor is written but not yet verified on device.
+- **M7** - export is not yet verified on device.
 - Quick Settings tile, if you ever want the toggle from the notification shade
   as well as the home screen.

@@ -10,8 +10,13 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import dev.lh.volsched.ui.editor.EditorScreen
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -27,7 +32,15 @@ class MainActivity : ComponentActivity() {
             val colors =
                 if (isSystemInDarkTheme()) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
             MaterialTheme(colorScheme = colors) {
-                Surface(Modifier.fillMaxSize()) { MainScreen() }
+                Surface(Modifier.fillMaxSize()) {
+                    // Two screens don't justify a navigation library.
+                    var editing by rememberSaveable { mutableStateOf(false) }
+                    if (editing) {
+                        EditorScreen(onClose = { editing = false })
+                    } else {
+                        MainScreen(onEditSchedule = { editing = true })
+                    }
+                }
             }
         }
     }
