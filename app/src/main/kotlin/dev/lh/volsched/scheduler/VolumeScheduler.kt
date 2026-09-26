@@ -1,9 +1,12 @@
 package dev.lh.volsched.scheduler
 
 import android.app.AlarmManager
+import android.app.KeyguardManager
+import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.PowerManager
 import dev.lh.volsched.audio.ApplyResult
 import dev.lh.volsched.audio.VolumeApplier
 import dev.lh.volsched.core.AudioStream
@@ -164,18 +167,44 @@ object VolumeScheduler {
         note: String,
     ) {
         val applier = VolumeApplier(context)
+        log.append("$note  state: ${deviceState(context, applier)}")
         levels.forEach { (stream, level) ->
             when (val result = applier.apply(stream, level)) {
                 is ApplyResult.Applied ->
                     log.append(
                         "$note  $stream ${result.before} -> ${result.after}" +
-                            if (result.clamped) " (clamped from $level)" else "",
+                            (if (result.clamped) " (clamped from $level)" else "") +
+                            (if (result.after != result.requested) "  DID NOT STICK, asked for ${result.requested}" else ""),
                     )
 
                 is ApplyResult.Refused ->
                     log.append("$note  $stream REFUSED ($level): ${result.reason}")
             }
         }
+    }
+
+    /** Logs all four levels as they are right now, e.g. to catch a later revert. */
+    fun logCurrentLevels(context: Context, label: String) {
+        val levels = VolumeApplier(context).currentLevels()
+        EventLog(context).append("$label: " + levels.entries.joinToString(" ") { "${it.key}=${it.value}" })
+    }
+
+    /**
+     * Screen, lock, Do Not Disturb and ringer state, so a change that didn't
+     * stick can be matched against what the phone was doing at the time.
+     */
+    private fun deviceState(context: Context, applier: VolumeApplier): String {
+        val screenOn = context.getSystemService(PowerManager::class.java).isInteractive
+        val locked = context.getSystemService(KeyguardManager::class.java).isKeyguardLocked
+        val dnd = when (context.getSystemService(NotificationManager::class.java).currentInterruptionFilter) {
+            NotificationManager.INTERRUPTION_FILTER_ALL -> "off"
+            NotificationManager.INTERRUPTION_FILTER_PRIORITY -> "priority"
+            NotificationManager.INTERRUPTION_FILTER_ALARMS -> "alarms"
+            NotificationManager.INTERRUPTION_FILTER_NONE -> "total"
+            else -> "unknown"
+        }
+        return "screen=${if (screenOn) "on" else "off"} locked=${if (locked) "yes" else "no"} " +
+            "dnd=$dnd ringer=${applier.ringerModeName()}"
     }
 
     /**

@@ -8,6 +8,7 @@ import dev.lh.volsched.widget.VolumeWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.LocalDateTime
@@ -38,6 +39,11 @@ class AlarmReceiver : BroadcastReceiver() {
                 VolumeScheduler.applyDue(appContext, intendedAt)
                 VolumeScheduler.rearm(appContext, "after firing")
                 VolumeWidget.refresh(appContext)
+
+                // Diagnostic for M3: a level that was set and then undone
+                // shortly afterwards shows up here as a mismatch.
+                delay(RECHECK_DELAY_MS)
+                VolumeScheduler.logCurrentLevels(appContext, "${RECHECK_DELAY_MS / 1000}s after firing")
             } catch (e: Exception) {
                 // Uncaught, this would kill the process and leave nothing in the
                 // event log, which is the only record of what happened.
@@ -50,5 +56,8 @@ class AlarmReceiver : BroadcastReceiver() {
 
     private companion object {
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+
+        // Well inside the time goAsync() allows a receiver to finish.
+        const val RECHECK_DELAY_MS = 5_000L
     }
 }
