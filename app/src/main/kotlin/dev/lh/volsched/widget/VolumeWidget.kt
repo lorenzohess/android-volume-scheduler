@@ -3,6 +3,9 @@ package dev.lh.volsched.widget
 import android.content.Context
 import android.os.UserManager
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
 import androidx.glance.GlanceTheme
@@ -32,7 +35,10 @@ import dev.lh.volsched.core.AudioStream
 import dev.lh.volsched.core.Firing
 import dev.lh.volsched.scheduler.VolumeChangeService
 import dev.lh.volsched.scheduler.VolumeScheduler
+import dev.lh.volsched.storage.EventLog
 import dev.lh.volsched.storage.ScheduleStore
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 import java.time.format.DateTimeFormatter
 
 private val NEXT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE HH:mm")
@@ -40,31 +46,45 @@ private val NEXT_FORMAT: DateTimeFormatter = DateTimeFormatter.ofPattern("EEE HH
 /**
  * Home screen widget: current levels, the next change, and the master toggle.
  *
- * State is snapshotted in [provideGlance] rather than collected reactively -
- * every path that changes something calls `refresh`, so there is nothing for a
- * subscription to add beyond complexity.
+ * All state is read inside [provideContent], never above it. Glance runs
+ * [provideGlance] once per session (about 45 s), and an update during a
+ * session only recomposes the content, so anything read above provideContent
+ * is a snapshot that gets redrawn unchanged. That froze the widget on OFF.
+ * The enabled flag is observed directly; levels and the next change are
+ * re-read whenever [refresh] bumps [refreshTick].
+ *
+ * Levels changed with the hardware keys show up at the next refresh (a
+ * firing, a toggle from the widget or the app, or an import), not live: there
+ * is no public broadcast for volume changes.
  */
 class VolumeWidget : GlanceAppWidget() {
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val enabled = ScheduleStore.get(context).schedule.value.enabled
+        val store = ScheduleStore.get(context)
         val applier = VolumeApplier(context)
-        val levels = applier.currentLevels()
-        val maxLevels = applier.maxLevels()
-        val next = VolumeScheduler.nextFiringOrNull(context)
 
         provideContent {
-            WidgetBody(enabled = enabled, levels = levels, maxLevels = maxLevels, next = next)
+            val schedule by store.schedule.collectAsState()
+            val tick by refreshTick.collectAsState()
+            val levels = remember(schedule, tick) { applier.currentLevels() }
+            val maxLevels = remember { applier.maxLevels() }
+            val next = remember(schedule, tick) { VolumeScheduler.nextFiringOrNull(context) }
+
+            WidgetBody(enabled = schedule.enabled, levels = levels, maxLevels = maxLevels, next = next)
         }
     }
 
     companion object {
+        private val refreshTick = MutableStateFlow(0)
+
         suspend fun refresh(context: Context) {
             // Before first unlock there is no launcher to draw the widget, and
             // Glance's state and WorkManager live in credential-encrypted
             // storage, so an update can only fail. BOOT_COMPLETED refreshes it
             // once the user unlocks.
             if (!context.getSystemService(UserManager::class.java).isUserUnlocked) return
+            // Recomposes a running session; updateAll starts one if none is.
+            refreshTick.update { it + 1 }
             VolumeWidget().updateAll(context)
         }
     }
@@ -94,9 +114,10 @@ class ToggleEnabledAction : ActionCallback {
             VolumeChangeService.reconcile(context, "widget toggle")
         } else {
             VolumeScheduler.cancel(context)
+            EventLog(context).append("disabled [widget toggle]: alarm cancelled")
         }
 
-        VolumeWidget().updateAll(context)
+        VolumeWidget.refresh(context)
     }
 }
 

@@ -170,6 +170,7 @@ fun MainScreen() {
                         VolumeScheduler.rearm(context, "main switch")
                     } else {
                         VolumeScheduler.cancel(context)
+                        eventLog.append("disabled [main switch]: alarm cancelled")
                     }
                     scope.launch { VolumeWidget.refresh(context) }
                     refresh()
