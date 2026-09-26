@@ -11,11 +11,10 @@ in [notes.md](notes.md).
 | Module | State |
 |---|---|
 | `:core` | Builds and passes **55 unit tests** on the JVM |
-| `:app` | **Written but never compiled** - no Android SDK on the machine it was authored on |
+| `:app` | Builds and installs (Pixel 10a, Android 17). Runtime behaviour **not yet verified** - see below |
 
-Treat the Android layer as a first draft. It is the part most likely to need
-fixing on first build - expect import and API-signature corrections, especially
-in the Glance widget, which is the newest and least stable API in use.
+Treat the Android layer as a first draft until the checks under "Verifying it
+actually works" have passed on the device.
 
 ## Building
 
@@ -84,6 +83,14 @@ The event log on the main screen records intended time, actual time, stream and
 level for every change. That is the instrument for milestone M3 - the point of
 it is to tell "the alarm never fired" apart from "the alarm fired and set the
 wrong value" after the fact, instead of trying to reproduce a misfire.
+
+To test alarms without waiting for real schedule times, generate a schedule
+whose events start a few minutes from now and import it:
+
+```sh
+python3 tools/test-schedule.py > test-schedule.json   # --start/--every/--count to adjust
+adb push test-schedule.json /sdcard/Download/
+```
 
 Worth confirming in this order, per PLAN.md section 8:
 
