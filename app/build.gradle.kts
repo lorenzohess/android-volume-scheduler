@@ -1,3 +1,5 @@
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -44,8 +46,12 @@ android {
     sourceSets["main"].java.srcDirs("src/main/kotlin")
 }
 
+// Target 17 without jvmToolchain(17), which would demand an installed JDK 17
+// and fail on a machine that only has 21. See core/build.gradle.kts.
 kotlin {
-    jvmToolchain(17)
+    compilerOptions {
+        jvmTarget.set(JvmTarget.JVM_17)
+    }
 }
 
 dependencies {
