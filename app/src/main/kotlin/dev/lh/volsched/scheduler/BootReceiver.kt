@@ -46,6 +46,10 @@ class BootReceiver : BroadcastReceiver() {
                 }
 
                 VolumeWidget.refresh(appContext)
+            } catch (e: Exception) {
+                // Uncaught, this would kill the process and leave nothing in the
+                // event log, which is the only record of what happened.
+                EventLog(appContext).append("ERROR handling $action: $e")
             } finally {
                 pendingResult.finish()
             }

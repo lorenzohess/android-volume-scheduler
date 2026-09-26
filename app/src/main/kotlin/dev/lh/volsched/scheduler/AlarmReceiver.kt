@@ -3,6 +3,7 @@ package dev.lh.volsched.scheduler
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import dev.lh.volsched.storage.EventLog
 import dev.lh.volsched.widget.VolumeWidget
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -37,6 +38,10 @@ class AlarmReceiver : BroadcastReceiver() {
                 VolumeScheduler.applyDue(appContext, intendedAt)
                 VolumeScheduler.rearm(appContext, "after firing")
                 VolumeWidget.refresh(appContext)
+            } catch (e: Exception) {
+                // Uncaught, this would kill the process and leave nothing in the
+                // event log, which is the only record of what happened.
+                EventLog(appContext).append("ERROR in alarm receiver: $e")
             } finally {
                 pendingResult.finish()
             }

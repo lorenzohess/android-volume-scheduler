@@ -1,6 +1,7 @@
 package dev.lh.volsched.widget
 
 import android.content.Context
+import android.os.UserManager
 import androidx.compose.runtime.Composable
 import androidx.glance.GlanceId
 import androidx.glance.GlanceModifier
@@ -58,6 +59,11 @@ class VolumeWidget : GlanceAppWidget() {
 
     companion object {
         suspend fun refresh(context: Context) {
+            // Before first unlock there is no launcher to draw the widget, and
+            // Glance's state and WorkManager live in credential-encrypted
+            // storage, so an update can only fail. BOOT_COMPLETED refreshes it
+            // once the user unlocks.
+            if (!context.getSystemService(UserManager::class.java).isUserUnlocked) return
             VolumeWidget().updateAll(context)
         }
     }

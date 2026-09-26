@@ -14,6 +14,13 @@
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
+    <!--
+      directBootAware is set per receiver below, deliberately not here. At the
+      application level it would also cover the activity, the widget receiver,
+      and library components (androidx.startup, which initialises WorkManager
+      for Glance), none of which can run before first unlock because their
+      data is in credential-encrypted storage.
+    -->
     <application
         android:name=".VolSchedApplication"
         android:allowBackup="false"
@@ -21,8 +28,7 @@
         android:icon="@mipmap/ic_launcher"
         android:roundIcon="@mipmap/ic_launcher"
         android:supportsRtl="true"
-        android:theme="@style/Theme.VolSched"
-        android:directBootAware="true">
+        android:theme="@style/Theme.VolSched">
 
         <activity
             android:name=".ui.MainActivity"
