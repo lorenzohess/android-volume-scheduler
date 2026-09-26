@@ -12,6 +12,9 @@
       an app in the background unless it runs a foreground service; see
       VolumeChangeService.
 
+      WAKE_LOCK: keeps the CPU awake from the alarm to the end of that
+      service's job, which a foreground service alone does not.
+
       No ACCESS_NOTIFICATION_POLICY: ring and notification levels are clamped to
       a minimum of 1, so the app never triggers a silent/vibrate transition.
       No POST_NOTIFICATIONS either: the service works without it, and its
@@ -21,6 +24,7 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <!--
       directBootAware is set per receiver below, deliberately not here. At the

@@ -150,7 +150,10 @@ service** ([background audio hardening](https://developer.android.com/about/vers
 The call returns normally and the level doesn't move. So every background
 volume change (alarm, boot/timezone reconcile, widget toggle) goes through
 `VolumeChangeService`, a `specialUse` foreground service that the receiver
-starts from `onReceive` and that stops itself within seconds. Its
+starts from `onReceive` and that stops itself within seconds. A partial wake
+lock, taken in `onReceive` and released when the job ends, keeps the CPU
+awake in between: a foreground service doesn't, and the alarm's own wake lock
+ends with `onReceive` (seen on the device as jobs stalling for up to 106 s). Its
 notification is deferred, so it is normally never shown. The alarm and boot
 broadcasts exempt the app from the background start restriction on
 foreground services. The in-app buttons need none of this: the activity is
@@ -191,8 +194,8 @@ optimisation exemption before reaching for `setAlarmClock`.
 device, no compatibility branches.
 
 **Permissions, in full:** `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`,
-`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` (the last two for
-Android 17, see §3). All install-time: no runtime permission requests, no
+`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE`, `WAKE_LOCK` (the last
+three for Android 17, see §3). All install-time: no runtime permission requests, no
 onboarding screen.
 
 ## 5. Module layout

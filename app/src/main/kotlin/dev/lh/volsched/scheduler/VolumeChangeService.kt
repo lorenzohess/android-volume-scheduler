@@ -8,6 +8,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.IBinder
+import android.os.PowerManager
 import dev.lh.volsched.R
 import dev.lh.volsched.storage.EventLog
 import dev.lh.volsched.widget.VolumeWidget
@@ -58,6 +59,8 @@ class VolumeChangeService : Service() {
             jobLock.withLock {
                 if (intent != null) runJob(applicationContext, intent)
             }
+            // Every non-null intent came through start(), which took the lock.
+            if (intent != null) releaseWakeLock(applicationContext)
             stopSelf(startId)
         }
         return START_NOT_STICKY
@@ -74,8 +77,14 @@ class VolumeChangeService : Service() {
         // afterwards shows up as a mismatch in the log.
         private const val RECHECK_DELAY_MS = 5_000L
 
+        // Generous: a job is a few seconds at most, but a leaked lock must not
+        // hold the CPU awake indefinitely.
+        private const val WAKE_LOCK_TIMEOUT_MS = 60_000L
+
         private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         private val jobLock = Mutex()
+
+        private var wakeLock: PowerManager.WakeLock? = null
 
         /** Apply what was due when the alarm armed for [fireAtMillis] fired, then re-arm. */
         fun fire(context: Context, fireAtMillis: Long) =
@@ -102,6 +111,12 @@ class VolumeChangeService : Service() {
          */
         private fun start(context: Context, intent: Intent) {
             val appContext = context.applicationContext
+            // Keep the CPU awake from here until the job finishes. The alarm's
+            // own wake lock is dropped as soon as onReceive returns, and a
+            // foreground service doesn't prevent sleep, so without this the
+            // job stalls until something else wakes the phone. Seen on the
+            // device: a 5 s delay taking up to 106 s, and a firing 34 s late.
+            wakeLock(appContext).acquire(WAKE_LOCK_TIMEOUT_MS)
             try {
                 appContext.startForegroundService(intent)
             } catch (e: IllegalStateException) {
@@ -109,8 +124,25 @@ class VolumeChangeService : Service() {
                 // job anyway: the re-arm matters even if Android then ignores
                 // the volume change, and the log will show both.
                 EventLog(appContext).append("ERROR starting volume service, running without it: $e")
-                scope.launch { jobLock.withLock { runJob(appContext, intent) } }
+                scope.launch {
+                    jobLock.withLock { runJob(appContext, intent) }
+                    releaseWakeLock(appContext)
+                }
             }
+        }
+
+        /** Reference counted, so overlapping jobs each hold it until they finish. */
+        @Synchronized
+        private fun wakeLock(context: Context): PowerManager.WakeLock =
+            wakeLock ?: context.getSystemService(PowerManager::class.java)
+                .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "volsched:volume-change")
+                .also { wakeLock = it }
+
+        private fun releaseWakeLock(context: Context) {
+            // Can only throw if releases outnumber acquires, which would be a
+            // bug here - not worth crashing the job over.
+            runCatching { wakeLock(context).release() }
+                .onFailure { EventLog(context).append("ERROR releasing wake lock: $it") }
         }
 
         private suspend fun runJob(context: Context, intent: Intent) {

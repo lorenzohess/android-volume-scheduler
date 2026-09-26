@@ -3,6 +3,9 @@ package dev.lh.volsched.scheduler
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import dev.lh.volsched.storage.EventLog
+import java.time.Instant
+import java.time.ZoneId
 
 /**
  * Receives the single pending alarm and hands it straight to
@@ -16,6 +19,12 @@ import android.content.Intent
 class AlarmReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        VolumeChangeService.fire(context, intent.getLongExtra(VolumeScheduler.EXTRA_FIRE_AT, 0L))
+        val fireAtMillis = intent.getLongExtra(VolumeScheduler.EXTRA_FIRE_AT, 0L)
+        VolumeChangeService.fire(context, fireAtMillis)
+
+        // Delivery time, separate from when the service applies the change,
+        // so a late change can be pinned on Doze or on the job itself.
+        val armedFor = Instant.ofEpochMilli(fireAtMillis).atZone(ZoneId.systemDefault()).toLocalDateTime()
+        EventLog(context).append("alarm delivered, armed for $armedFor")
     }
 }
