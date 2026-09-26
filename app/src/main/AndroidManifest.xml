@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!--
+      The only two permissions this app needs.
+
+      USE_EXACT_ALARM is granted at install with no prompt. Play Store policy
+      restricts it to alarm/calendar apps, but this is sideloaded and personal,
+      so there is no "Alarms & reminders" onboarding flow to write.
+
+      No ACCESS_NOTIFICATION_POLICY: ring and notification levels are clamped to
+      a minimum of 1, so the app never triggers a silent/vibrate transition.
+    -->
+    <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+
+    <application
+        android:name=".VolSchedApplication"
+        android:allowBackup="false"
+        android:label="@string/app_name"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.VolSched"
+        android:directBootAware="true">
+
+        <activity
+            android:name=".ui.MainActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.VolSched">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Fired by AlarmManager. Internal only. -->
+        <receiver
+            android:name=".scheduler.AlarmReceiver"
+            android:exported="false"
+            android:directBootAware="true" />
+
+        <!--
+          Exported because every action here is a protected system broadcast.
+
+          LOCKED_BOOT_COMPLETED is the important one: plain BOOT_COMPLETED does
+          not arrive until first unlock, so an overnight reboot would otherwise
+          swallow every event until the phone is picked up.
+
+          MY_PACKAGE_REPLACED matters during development - each sideload wipes
+          pending alarms.
+        -->
+        <receiver
+            android:name=".scheduler.BootReceiver"
+            android:exported="true"
+            android:directBootAware="true">
+            <intent-filter>
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+                <action android:name="android.intent.action.TIMEZONE_CHANGED" />
+                <action android:name="android.intent.action.TIME_SET" />
+            </intent-filter>
+        </receiver>
+
+        <receiver
+            android:name=".widget.VolumeWidgetReceiver"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/volume_widget_info" />
+        </receiver>
+
+    </application>
+</manifest>

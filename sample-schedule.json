@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "enabled": true,
+  "presets": {
+    "RING": [
+      { "name": "Minimum", "level": 1 },
+      { "name": "Quiet", "level": 3 },
+      { "name": "Loud", "level": 7 }
+    ],
+    "NOTIFICATION": [
+      { "name": "Minimum", "level": 1 },
+      { "name": "Normal", "level": 4 }
+    ],
+    "MEDIA": [
+      { "name": "Off", "level": 0 },
+      { "name": "Podcast", "level": 8 },
+      { "name": "Music", "level": 18 }
+    ],
+    "ALARM": [
+      { "name": "Normal", "level": 5 }
+    ]
+  },
+  "profiles": [
+    {
+      "name": "Sleep",
+      "slots": {
+        "RING": { "type": "preset", "name": "Minimum" },
+        "NOTIFICATION": { "type": "preset", "name": "Minimum" },
+        "MEDIA": { "type": "preset", "name": "Off" },
+        "ALARM": { "type": "preset", "name": "Normal" }
+      }
+    },
+    {
+      "name": "Work",
+      "slots": {
+        "RING": { "type": "preset", "name": "Quiet" },
+        "NOTIFICATION": { "type": "preset", "name": "Minimum" }
+      }
+    },
+    {
+      "name": "Evening",
+      "slots": {
+        "RING": { "type": "preset", "name": "Loud" },
+        "NOTIFICATION": { "type": "preset", "name": "Normal" },
+        "MEDIA": { "type": "preset", "name": "Music" }
+      }
+    }
+  ],
+  "blocks": [
+    { "day": "MONDAY",    "start": "07:00", "durationMin": 120, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "MONDAY",    "start": "09:00", "durationMin": 480, "target": { "type": "profile", "name": "Work" } },
+    { "day": "MONDAY",    "start": "17:00", "durationMin": 300, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "MONDAY",    "start": "22:00", "durationMin": 540, "target": { "type": "profile", "name": "Sleep" } },
+
+    { "day": "TUESDAY",   "start": "07:00", "durationMin": 120, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "TUESDAY",   "start": "09:00", "durationMin": 480, "target": { "type": "profile", "name": "Work" } },
+    { "day": "TUESDAY",   "start": "17:00", "durationMin": 300, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "TUESDAY",   "start": "22:00", "durationMin": 540, "target": { "type": "profile", "name": "Sleep" } },
+
+    { "day": "WEDNESDAY", "start": "07:00", "durationMin": 120, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "WEDNESDAY", "start": "09:00", "durationMin": 480, "target": { "type": "profile", "name": "Work" } },
+    { "day": "WEDNESDAY", "start": "17:00", "durationMin": 300, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "WEDNESDAY", "start": "22:00", "durationMin": 540, "target": { "type": "profile", "name": "Sleep" } },
+
+    { "day": "THURSDAY",  "start": "07:00", "durationMin": 120, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "THURSDAY",  "start": "09:00", "durationMin": 480, "target": { "type": "profile", "name": "Work" } },
+    { "day": "THURSDAY",  "start": "17:00", "durationMin": 300, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "THURSDAY",  "start": "22:00", "durationMin": 540, "target": { "type": "profile", "name": "Sleep" } },
+
+    { "day": "FRIDAY",    "start": "07:00", "durationMin": 120, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "FRIDAY",    "start": "09:00", "durationMin": 480, "target": { "type": "profile", "name": "Work" } },
+    { "day": "FRIDAY",    "start": "17:00", "durationMin": 390, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "FRIDAY",    "start": "23:30", "durationMin": 570, "target": { "type": "profile", "name": "Sleep" } },
+
+    { "day": "SATURDAY",  "start": "09:00", "durationMin": 870, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "SATURDAY",  "start": "13:00", "durationMin": 180, "target": { "type": "single", "stream": "MEDIA", "spec": { "type": "raw", "level": 20 } } },
+    { "day": "SATURDAY",  "start": "23:30", "durationMin": 570, "target": { "type": "profile", "name": "Sleep" } },
+
+    { "day": "SUNDAY",    "start": "09:00", "durationMin": 780, "target": { "type": "profile", "name": "Evening" } },
+    { "day": "SUNDAY",    "start": "22:00", "durationMin": 540, "target": { "type": "profile", "name": "Sleep" } }
+  ]
+}

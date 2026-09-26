@@ -1,0 +1,68 @@
+plugins {
+    alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
+    alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.kotlin.compose)
+}
+
+android {
+    namespace = "dev.lh.volsched"
+
+    // Bump both to 36 once you're on AGP 8.9+. Nothing here needs it; the
+    // device just has to be >= minSdk.
+    compileSdk = 35
+
+    defaultConfig {
+        applicationId = "dev.lh.volsched"
+        // Personal, single-device app: no reason to support anything older,
+        // which removes every compatibility branch. USE_EXACT_ALARM needs 33+,
+        // getStreamMinVolume needs 28+, direct boot needs 24+.
+        minSdk = 34
+        targetSdk = 35
+        versionCode = 1
+        versionName = "0.1"
+    }
+
+    buildFeatures {
+        compose = true
+    }
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    buildTypes {
+        release {
+            isMinifyEnabled = false
+        }
+        debug {
+            applicationIdSuffix = ".debug"
+        }
+    }
+
+    sourceSets["main"].java.srcDirs("src/main/kotlin")
+}
+
+kotlin {
+    jvmToolchain(17)
+}
+
+dependencies {
+    implementation(project(":core"))
+
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.core)
+    implementation(libs.androidx.core.ktx)
+
+    implementation(platform(libs.compose.bom))
+    implementation(libs.compose.ui)
+    implementation(libs.compose.material3)
+    implementation(libs.compose.ui.tooling.preview)
+    debugImplementation(libs.compose.ui.tooling)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
+    implementation(libs.glance.appwidget)
+    implementation(libs.glance.material3)
+}

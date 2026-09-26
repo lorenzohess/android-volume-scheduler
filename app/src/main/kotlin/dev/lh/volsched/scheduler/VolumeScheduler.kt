@@ -1,0 +1,210 @@
+package dev.lh.volsched.scheduler
+
+import android.app.AlarmManager
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import dev.lh.volsched.audio.ApplyResult
+import dev.lh.volsched.audio.VolumeApplier
+import dev.lh.volsched.core.AudioStream
+import dev.lh.volsched.core.Event
+import dev.lh.volsched.core.Firing
+import dev.lh.volsched.core.ScheduleException
+import dev.lh.volsched.core.compile
+import dev.lh.volsched.core.currentLevels
+import dev.lh.volsched.core.eventsAt
+import dev.lh.volsched.core.nextFiring
+import dev.lh.volsched.storage.EventLog
+import dev.lh.volsched.storage.ScheduleStore
+import java.time.LocalDateTime
+import java.time.ZoneId
+
+/**
+ * All scheduling behaviour, driven by the trigger table in PLAN.md section 3.
+ *
+ * Exactly one alarm is pending at any time - the next event across all four
+ * streams - and it is re-armed after each firing. Registering an alarm per
+ * event would mean tracking N PendingIntents and reconciling them on every
+ * edit, for no benefit.
+ */
+object VolumeScheduler {
+
+    const val EXTRA_FIRE_AT = "dev.lh.volsched.FIRE_AT"
+    private const val REQUEST_CODE = 1001
+
+    /** Arms the next alarm, replacing any pending one. */
+    fun rearm(context: Context, reason: String) {
+        val log = EventLog(context)
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        cancel(context)
+
+        if (!ScheduleStore.get(context).schedule.value.enabled) {
+            log.append("re-arm [$reason]: scheduling is disabled, nothing armed")
+            return
+        }
+
+        val firing = nextFiring(compiledEvents(context, log), LocalDateTime.now())
+        if (firing == null) {
+            log.append("re-arm [$reason]: schedule has no events")
+            return
+        }
+
+        val triggerAtMillis = firing.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val pendingIntent = alarmIntent(context, triggerAtMillis, mutable = false)
+
+        if (alarmManager.canScheduleExactAlarms()) {
+            alarmManager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent,
+            )
+        } else {
+            // Should not happen: USE_EXACT_ALARM is granted at install. If it
+            // ever does, an inexact alarm beats no alarm.
+            log.append("WARNING: exact alarms unavailable, falling back to inexact")
+            alarmManager.setAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                triggerAtMillis,
+                pendingIntent,
+            )
+        }
+
+        log.append("re-arm [$reason]: next ${firing.at} -> ${firing.events.describe()}")
+    }
+
+    fun cancel(context: Context) {
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        // FLAG_NO_CREATE matches on request code and Intent.filterEquals, which
+        // ignores extras, so this finds whatever is currently pending.
+        val existing = PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            Intent(context, AlarmReceiver::class.java),
+            PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
+        )
+        if (existing != null) {
+            alarmManager.cancel(existing)
+            existing.cancel()
+        }
+    }
+
+    /**
+     * Applies the events due at [intendedAt] - the instant the alarm was armed
+     * for, not the instant it actually fired.
+     *
+     * Only the due streams are touched. Applying everything [currentLevels]
+     * reports would clobber a manual change made on some other stream.
+     */
+    fun applyDue(context: Context, intendedAt: LocalDateTime) {
+        val log = EventLog(context)
+        if (!ScheduleStore.get(context).schedule.value.enabled) {
+            log.append("alarm fired for $intendedAt but scheduling is disabled, ignoring")
+            return
+        }
+
+        val due = eventsAt(compiledEvents(context, log), intendedAt)
+        if (due.isEmpty()) {
+            log.append("alarm fired for $intendedAt but nothing is due (schedule edited since arming?)")
+            return
+        }
+
+        applyLevels(context, due.associate { it.stream to it.level }, log, "fired  due=$intendedAt")
+    }
+
+    /**
+     * Forces every stream onto what the schedule says should be true right now.
+     *
+     * Runs on boot and on re-enable. This is what keeps volumes correct after a
+     * reboot, when pending alarms are gone and nothing would otherwise fire
+     * until the next edge.
+     */
+    fun reconcile(context: Context, reason: String) {
+        val log = EventLog(context)
+        if (!ScheduleStore.get(context).schedule.value.enabled) {
+            log.append("reconcile [$reason]: scheduling is disabled, skipping")
+            return
+        }
+
+        val levels = currentLevels(compiledEvents(context, log), LocalDateTime.now())
+        if (levels.isEmpty()) {
+            log.append("reconcile [$reason]: schedule has no events")
+            return
+        }
+
+        applyLevels(context, levels, log, "reconcile [$reason]")
+    }
+
+    /** Debug affordance: apply the next firing immediately without waiting. */
+    fun fireNextNow(context: Context) {
+        val log = EventLog(context)
+        val firing = nextFiring(compiledEvents(context, log), LocalDateTime.now())
+        if (firing == null) {
+            log.append("DEBUG fire-now: no events")
+            return
+        }
+        applyLevels(
+            context,
+            firing.events.associate { it.stream to it.level },
+            log,
+            "DEBUG fire-now (was due ${firing.at})",
+        )
+    }
+
+    /** For the UI and widget's "next change" line. */
+    fun nextFiringOrNull(context: Context): Firing? {
+        val schedule = ScheduleStore.get(context).schedule.value
+        if (!schedule.enabled) return null
+        return nextFiring(compiledEvents(context, EventLog(context)), LocalDateTime.now())
+    }
+
+    private fun applyLevels(
+        context: Context,
+        levels: Map<AudioStream, Int>,
+        log: EventLog,
+        note: String,
+    ) {
+        val applier = VolumeApplier(context)
+        levels.forEach { (stream, level) ->
+            when (val result = applier.apply(stream, level)) {
+                is ApplyResult.Applied ->
+                    log.append(
+                        "$note  $stream ${result.before} -> ${result.after}" +
+                            if (result.clamped) " (clamped from $level)" else "",
+                    )
+
+                is ApplyResult.Refused ->
+                    log.append("$note  $stream REFUSED ($level): ${result.reason}")
+            }
+        }
+    }
+
+    /**
+     * Compiles the stored schedule, logging rather than throwing.
+     *
+     * The store should only ever hold validated schedules, but a receiver that
+     * crashes on a bad file would be far harder to diagnose than one that logs
+     * and does nothing.
+     */
+    private fun compiledEvents(context: Context, log: EventLog): List<Event> =
+        try {
+            ScheduleStore.get(context).schedule.value.compile()
+        } catch (e: ScheduleException) {
+            log.append("ERROR compiling schedule: ${e.message}")
+            emptyList()
+        }
+
+    private fun alarmIntent(context: Context, fireAtMillis: Long, mutable: Boolean): PendingIntent {
+        val intent = Intent(context, AlarmReceiver::class.java)
+            .putExtra(EXTRA_FIRE_AT, fireAtMillis)
+        return PendingIntent.getBroadcast(
+            context,
+            REQUEST_CODE,
+            intent,
+            PendingIntent.FLAG_UPDATE_CURRENT or
+                if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE,
+        )
+    }
+
+    private fun List<Event>.describe(): String =
+        joinToString(", ") { "${it.stream}=${it.level}" }
+}

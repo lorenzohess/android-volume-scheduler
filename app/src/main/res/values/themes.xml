@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+      Platform theme rather than Theme.Material3.* so the app doesn't need the
+      com.google.android.material dependency. Compose does its own theming; this
+      only has to supply a sane window background and follow the system's
+      light/dark setting.
+    -->
+    <style name="Theme.VolSched" parent="@android:style/Theme.DeviceDefault.DayNight">
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowNoTitle">true</item>
+    </style>
+</resources>
