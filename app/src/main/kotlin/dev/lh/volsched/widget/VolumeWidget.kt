@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import dev.lh.volsched.audio.VolumeApplier
 import dev.lh.volsched.core.AudioStream
 import dev.lh.volsched.core.Firing
+import dev.lh.volsched.scheduler.VolumeChangeService
 import dev.lh.volsched.scheduler.VolumeScheduler
 import dev.lh.volsched.storage.ScheduleStore
 import java.time.format.DateTimeFormatter
@@ -88,9 +89,9 @@ class ToggleEnabledAction : ActionCallback {
 
         if (nowEnabled) {
             // Catch up to whatever the schedule says should be true right now,
-            // then arm the next edge.
-            VolumeScheduler.reconcile(context, "widget toggle")
-            VolumeScheduler.rearm(context, "widget toggle")
+            // then arm the next edge. Through the foreground service, because
+            // no activity is visible and Android 17 would ignore the change.
+            VolumeChangeService.reconcile(context, "widget toggle")
         } else {
             VolumeScheduler.cancel(context)
         }

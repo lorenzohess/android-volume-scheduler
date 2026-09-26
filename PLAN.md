@@ -143,9 +143,22 @@ event-driven.
 Applying a volume is `setStreamVolume(stream, level, 0)`. Flags must be
 `0`: no `FLAG_SHOW_UI`, no `FLAG_PLAY_SOUND`.
 
-A `BroadcastReceiver` is sufficient for alarm delivery — it has ~10s and
-the work is a small file read plus four setter calls. Use `goAsync()` for
-the read. No foreground service.
+~~A `BroadcastReceiver` is sufficient for alarm delivery. No foreground
+service.~~ Disproved on the device at M3: **Android 17 silently ignores
+`setStreamVolume` from an app with no visible activity and no foreground
+service** ([background audio hardening](https://developer.android.com/about/versions/17/changes/bg-audio)).
+The call returns normally and the level doesn't move. So every background
+volume change (alarm, boot/timezone reconcile, widget toggle) goes through
+`VolumeChangeService`, a `specialUse` foreground service that the receiver
+starts from `onReceive` and that stops itself within seconds. Its
+notification is deferred, so it is normally never shown. The alarm and boot
+broadcasts exempt the app from the background start restriction on
+foreground services. The in-app buttons need none of this: the activity is
+visible.
+
+This depends on `targetSdk` < 37. Apps targeting 37 also need the service to
+hold while-in-use capability, which a service started from a receiver does
+not get.
 
 ### Known behavioural trade
 
@@ -177,8 +190,10 @@ optimisation exemption before reaching for `setAlarmClock`.
 **minSdk = compileSdk = the device's shipping API.** Personal use, one
 device, no compatibility branches.
 
-**Permissions, in full:** `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`.
-No runtime permission requests, no onboarding screen.
+**Permissions, in full:** `USE_EXACT_ALARM`, `RECEIVE_BOOT_COMPLETED`,
+`FOREGROUND_SERVICE`, `FOREGROUND_SERVICE_SPECIAL_USE` (the last two for
+Android 17, see §3). All install-time: no runtime permission requests, no
+onboarding screen.
 
 ## 5. Module layout
 

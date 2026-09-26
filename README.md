@@ -104,6 +104,12 @@ Worth confirming in this order, per PLAN.md section 8:
 
 ## Known trade-offs
 
+- **A foreground service for every background volume change.** Android 17
+  silently ignores volume changes from apps that are neither visible nor
+  running a foreground service, so the alarm, boot and widget paths start a
+  short-lived `specialUse` service to do the change. It needs `targetSdk`
+  below 37; see the comment in `app/build.gradle.kts`.
+
 - **Reboot beats manual override.** Reconcile runs on boot, so an overnight
   auto-reboot resets volumes to schedule. Deliberate: the alternative is volumes
   drifting out of sync after every restart.

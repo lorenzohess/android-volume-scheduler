@@ -2,17 +2,25 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
     <!--
-      The only two permissions this app needs.
+      Every permission here is granted at install, with no prompt.
 
-      USE_EXACT_ALARM is granted at install with no prompt. Play Store policy
-      restricts it to alarm/calendar apps, but this is sideloaded and personal,
-      so there is no "Alarms & reminders" onboarding flow to write.
+      USE_EXACT_ALARM: Play Store policy restricts it to alarm/calendar apps,
+      but this is sideloaded and personal, so there is no "Alarms & reminders"
+      onboarding flow to write.
+
+      FOREGROUND_SERVICE(_SPECIAL_USE): Android 17 ignores volume changes from
+      an app in the background unless it runs a foreground service; see
+      VolumeChangeService.
 
       No ACCESS_NOTIFICATION_POLICY: ring and notification levels are clamped to
       a minimum of 1, so the app never triggers a silent/vibrate transition.
+      No POST_NOTIFICATIONS either: the service works without it, and its
+      notification is deferred and normally never shown anyway.
     -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!--
       directBootAware is set per receiver below, deliberately not here. At the
@@ -46,6 +54,23 @@
             android:name=".scheduler.AlarmReceiver"
             android:exported="false"
             android:directBootAware="true" />
+
+        <!--
+          Does the actual volume changes for the receivers and the widget.
+          Direct-boot aware because the boot receiver starts it before first
+          unlock. specialUse because none of the typed services fit, and
+          several of them (mediaPlayback included) may not be started from a
+          BOOT_COMPLETED receiver on API 35+.
+        -->
+        <service
+            android:name=".scheduler.VolumeChangeService"
+            android:exported="false"
+            android:directBootAware="true"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Applies scheduled volume changes. Android 17 ignores volume changes from apps without a foreground service." />
+        </service>
 
         <!--
           Exported because every action here is a protected system broadcast.

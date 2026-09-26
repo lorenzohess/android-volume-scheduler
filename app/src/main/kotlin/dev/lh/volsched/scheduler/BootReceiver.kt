@@ -20,38 +20,37 @@ import kotlinx.coroutines.launch
 class BootReceiver : BroadcastReceiver() {
 
     override fun onReceive(context: Context, intent: Intent) {
-        val pendingResult = goAsync()
         val appContext = context.applicationContext
         val action = intent.action ?: "unknown"
+        EventLog(appContext).append("received $action")
 
-        scope.launch {
-            try {
-                EventLog(appContext).append("received $action")
+        when (action) {
+            // Boot, and timezone moves, change what "should" be true right
+            // now - so converge on it, then arm. The volume change needs a
+            // foreground service on Android 17, started here while this
+            // broadcast still exempts the app from the background start limit.
+            Intent.ACTION_LOCKED_BOOT_COMPLETED,
+            Intent.ACTION_BOOT_COMPLETED,
+            Intent.ACTION_TIMEZONE_CHANGED,
+            -> VolumeChangeService.reconcile(appContext, action)
 
-                when (action) {
-                    // Boot, and timezone moves, change what "should" be true
-                    // right now - so converge on it, then arm.
-                    Intent.ACTION_LOCKED_BOOT_COMPLETED,
-                    Intent.ACTION_BOOT_COMPLETED,
-                    Intent.ACTION_TIMEZONE_CHANGED,
-                    -> {
-                        VolumeScheduler.reconcile(appContext, action)
+            // A reinstall or a clock correction invalidates the pending
+            // alarm but not the current volumes, so don't reconcile -
+            // that would clobber a manual override.
+            else -> {
+                val pendingResult = goAsync()
+                scope.launch {
+                    try {
                         VolumeScheduler.rearm(appContext, action)
+                        VolumeWidget.refresh(appContext)
+                    } catch (e: Exception) {
+                        // Uncaught, this would kill the process and leave nothing in
+                        // the event log, which is the only record of what happened.
+                        EventLog(appContext).append("ERROR handling $action: $e")
+                    } finally {
+                        pendingResult.finish()
                     }
-
-                    // A reinstall or a clock correction invalidates the pending
-                    // alarm but not the current volumes, so don't reconcile -
-                    // that would clobber a manual override.
-                    else -> VolumeScheduler.rearm(appContext, action)
                 }
-
-                VolumeWidget.refresh(appContext)
-            } catch (e: Exception) {
-                // Uncaught, this would kill the process and leave nothing in the
-                // event log, which is the only record of what happened.
-                EventLog(appContext).append("ERROR handling $action: $e")
-            } finally {
-                pendingResult.finish()
             }
         }
     }

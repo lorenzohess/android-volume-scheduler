@@ -34,6 +34,8 @@ object VolumeScheduler {
 
     const val EXTRA_FIRE_AT = "dev.lh.volsched.FIRE_AT"
     private const val REQUEST_CODE = 1001
+    private const val MAX_ATTEMPTS = 8
+    private const val RETRY_DELAY_MS = 250L
 
     /** Arms the next alarm, replacing any pending one. */
     fun rearm(context: Context, reason: String) {
@@ -97,8 +99,10 @@ object VolumeScheduler {
      *
      * Only the due streams are touched. Applying everything [currentLevels]
      * reports would clobber a manual change made on some other stream.
+     *
+     * [retry]: see [applyLevels]. Only for background callers; it sleeps.
      */
-    fun applyDue(context: Context, intendedAt: LocalDateTime) {
+    fun applyDue(context: Context, intendedAt: LocalDateTime, retry: Boolean = false) {
         val log = EventLog(context)
         if (!ScheduleStore.get(context).schedule.value.enabled) {
             log.append("alarm fired for $intendedAt but scheduling is disabled, ignoring")
@@ -111,7 +115,7 @@ object VolumeScheduler {
             return
         }
 
-        applyLevels(context, due.associate { it.stream to it.level }, log, "fired  due=$intendedAt")
+        applyLevels(context, due.associate { it.stream to it.level }, log, "fired  due=$intendedAt", retry)
     }
 
     /**
@@ -120,8 +124,10 @@ object VolumeScheduler {
      * Runs on boot and on re-enable. This is what keeps volumes correct after a
      * reboot, when pending alarms are gone and nothing would otherwise fire
      * until the next edge.
+     *
+     * [retry]: see [applyLevels]. Only for background callers; it sleeps.
      */
-    fun reconcile(context: Context, reason: String) {
+    fun reconcile(context: Context, reason: String, retry: Boolean = false) {
         val log = EventLog(context)
         if (!ScheduleStore.get(context).schedule.value.enabled) {
             log.append("reconcile [$reason]: scheduling is disabled, skipping")
@@ -134,7 +140,7 @@ object VolumeScheduler {
             return
         }
 
-        applyLevels(context, levels, log, "reconcile [$reason]")
+        applyLevels(context, levels, log, "reconcile [$reason]", retry)
     }
 
     /** Debug affordance: apply the next firing immediately without waiting. */
@@ -160,21 +166,37 @@ object VolumeScheduler {
         return nextFiring(compiledEvents(context, EventLog(context)), LocalDateTime.now())
     }
 
+    /**
+     * With [retry], a change that didn't stick is tried again a few times.
+     * Android 17 ignores volume changes from the background unless a
+     * foreground service is running, and the service's foreground state may
+     * reach AudioService a moment after startForeground() returns. Blocks
+     * the calling thread, so never retry on the main thread.
+     */
     private fun applyLevels(
         context: Context,
         levels: Map<AudioStream, Int>,
         log: EventLog,
         note: String,
+        retry: Boolean = false,
     ) {
         val applier = VolumeApplier(context)
         log.append("$note  state: ${deviceState(context, applier)}")
         levels.forEach { (stream, level) ->
-            when (val result = applier.apply(stream, level)) {
+            var result = applier.apply(stream, level)
+            var attempts = 1
+            while (retry && attempts < MAX_ATTEMPTS && result is ApplyResult.Applied && result.after != result.requested) {
+                Thread.sleep(RETRY_DELAY_MS)
+                result = applier.apply(stream, level)
+                attempts++
+            }
+            when (result) {
                 is ApplyResult.Applied ->
                     log.append(
                         "$note  $stream ${result.before} -> ${result.after}" +
                             (if (result.clamped) " (clamped from $level)" else "") +
-                            (if (result.after != result.requested) "  DID NOT STICK, asked for ${result.requested}" else ""),
+                            (if (result.after != result.requested) "  DID NOT STICK, asked for ${result.requested}" else "") +
+                            (if (attempts > 1) "  [attempt $attempts]" else ""),
                     )
 
                 is ApplyResult.Refused ->

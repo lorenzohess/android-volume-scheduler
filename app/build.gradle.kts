@@ -20,6 +20,10 @@ android {
         // which removes every compatibility branch. USE_EXACT_ALARM needs 33+,
         // getStreamMinVolume needs 28+, direct boot needs 24+.
         minSdk = 34
+        // Keep below 37. On Android 17, apps targeting 37 may only change volume
+        // from a foreground service holding while-in-use capability, which a
+        // service started from an alarm or boot receiver never gets. Below 37,
+        // any non-shortService foreground service is enough (VolumeChangeService).
         targetSdk = 35
         versionCode = 1
         versionName = "0.1"
