@@ -60,19 +60,21 @@ fun Schedule.compile(): List<Event> =
         .sortedWith(compareBy({ it.weekMinute }, { it.stream.ordinal }))
 
 private fun Schedule.resolve(stream: AudioStream, spec: LevelSpec): Int =
+    levelOf(stream, spec) ?: throw ScheduleException("Unknown preset '${(spec as LevelSpec.PresetRef).name}' for $stream")
+
+/** The level [spec] stands for on [stream], or null if it names a preset that doesn't exist. */
+fun Schedule.levelOf(stream: AudioStream, spec: LevelSpec): Int? =
     when (spec) {
         is LevelSpec.Raw -> spec.level
-        is LevelSpec.PresetRef ->
-            presets[stream]?.firstOrNull { it.name == spec.name }?.level
-                ?: throw ScheduleException("Unknown preset '${spec.name}' for $stream")
+        is LevelSpec.PresetRef -> presets[stream]?.firstOrNull { it.name == spec.name }?.level
     }
 
 /**
  * Clamps a level into the range this app is willing to set.
  *
- * Validation should already guarantee this, but the apply path calls it too:
- * a level that slipped through would otherwise throw SecurityException on ring
- * or notification.
+ * Validation should already guarantee this, but the apply path calls it too,
+ * so a level that slipped through lands on a level Android accepts instead of
+ * being adjusted silently by the platform.
  */
 fun AudioStream.clamp(level: Int, maxLevel: Int): Int =
     level.coerceIn(minLevel, maxOf(minLevel, maxLevel))

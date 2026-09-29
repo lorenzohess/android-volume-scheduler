@@ -28,6 +28,7 @@ import dev.lh.volsched.core.LevelSpec
 import dev.lh.volsched.core.Profile
 import dev.lh.volsched.core.Schedule
 import dev.lh.volsched.core.label
+import dev.lh.volsched.core.levelOf
 import dev.lh.volsched.core.profileUsages
 import dev.lh.volsched.core.putProfile
 import dev.lh.volsched.core.removeProfile
@@ -98,6 +99,10 @@ private fun ProfileDialog(
 
     val trimmed = name.trim()
     val usages = original?.let { draft.profileUsages(it.name) }.orEmpty()
+    // Android mutes notifications while the ringer is muted, so a muted-ring
+    // profile leaves NOTIFICATION unset: it then returns to its own level
+    // when a later block unmutes ring.
+    val ringMuted = slots[AudioStream.RING]?.let { draft.levelOf(AudioStream.RING, it) } == 0
     val problem = when {
         trimmed.isEmpty() -> "Needs a name"
         draft.profiles.any { it.name == trimmed && it.name != original?.name } -> "Another profile is called $trimmed"
@@ -121,14 +126,22 @@ private fun ProfileDialog(
                 )
                 AudioStream.entries.forEach { stream ->
                     Text(stream.name, fontWeight = FontWeight.Bold)
-                    LevelSpecPicker(
-                        stream = stream,
-                        spec = slots[stream],
-                        presets = draft.presets[stream].orEmpty(),
-                        maxLevel = maxLevels[stream] ?: 15,
-                        allowUnset = true,
-                        onChange = { spec -> slots = if (spec == null) slots - stream else slots + (stream to spec) },
-                    )
+                    if (stream == AudioStream.NOTIFICATION && ringMuted) {
+                        Text(
+                            "Muted with RING. Android mutes notifications while the ringer is muted; " +
+                                "they return to their previous level when ring is unmuted.",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    } else {
+                        LevelSpecPicker(
+                            stream = stream,
+                            spec = slots[stream],
+                            presets = draft.presets[stream].orEmpty(),
+                            maxLevel = maxLevels[stream] ?: 15,
+                            allowUnset = true,
+                            onChange = { spec -> slots = if (spec == null) slots - stream else slots + (stream to spec) },
+                        )
+                    }
                 }
                 if (usages.isNotEmpty()) {
                     Text(
@@ -147,8 +160,10 @@ private fun ProfileDialog(
                 enabled = problem == null,
                 onClick = {
                     // Stream order, so the saved file lists slots consistently.
-                    val ordered: Map<AudioStream, LevelSpec> =
-                        AudioStream.entries.mapNotNull { stream -> slots[stream]?.let { stream to it } }.toMap()
+                    val ordered: Map<AudioStream, LevelSpec> = AudioStream.entries
+                        .filterNot { it == AudioStream.NOTIFICATION && ringMuted }
+                        .mapNotNull { stream -> slots[stream]?.let { stream to it } }
+                        .toMap()
                     onSave(draft.putProfile(Profile(trimmed, ordered), replacing = original?.name))
                 },
             ) { Text("Save") }

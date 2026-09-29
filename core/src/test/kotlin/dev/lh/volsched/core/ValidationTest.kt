@@ -24,28 +24,92 @@ class ValidationTest {
     }
 
     @Test
-    fun `ring level zero is rejected because it would trigger silent mode`() {
-        val schedule = Schedule(blocks = listOf(block(target = single(AudioStream.RING, 0))))
+    fun `ring, notification and media may be zero`() {
+        val schedule = Schedule(
+            blocks = listOf(
+                block(start = at(9), target = single(AudioStream.RING, 0)),
+                block(start = at(10), target = single(AudioStream.NOTIFICATION, 0)),
+                block(start = at(11), target = single(AudioStream.MEDIA, 0)),
+            ),
+        )
+
+        assertEquals(emptyList(), schedule.errors())
+    }
+
+    @Test
+    fun `alarm zero is rejected because Android won't silence the alarm stream`() {
+        val schedule = Schedule(blocks = listOf(block(target = single(AudioStream.ALARM, 0))))
 
         val error = schedule.errors().single()
         assertIs<ValidationError.LevelTooLow>(error)
-        assertEquals(AudioStream.RING, error.stream)
-        assertTrue(error.message.contains("DND"))
+        assertEquals(AudioStream.ALARM, error.stream)
+        assertTrue(error.message.contains("alarm"))
     }
 
     @Test
-    fun `notification level zero is rejected for the same reason`() {
-        val schedule = Schedule(blocks = listOf(block(target = single(AudioStream.NOTIFICATION, 0))))
+    fun `a profile muting ring while setting notification is rejected once, not per block`() {
+        val schedule = Schedule(
+            profiles = listOf(
+                Profile("Quiet", mapOf(AudioStream.RING to LevelSpec.Raw(0), AudioStream.NOTIFICATION to LevelSpec.Raw(2))),
+            ),
+            blocks = listOf(
+                block(day = DayOfWeek.MONDAY, target = Target.ProfileRef("Quiet")),
+                block(day = DayOfWeek.TUESDAY, target = Target.ProfileRef("Quiet")),
+            ),
+        )
 
-        assertIs<ValidationError.LevelTooLow>(schedule.errors().single())
+        val error = schedule.errors().single()
+        assertIs<ValidationError.NotificationWhileRingMuted>(error)
+        assertEquals("Profile 'Quiet'", error.where)
+        assertEquals(2, error.level)
     }
 
     @Test
-    fun `media and alarm may legitimately be zero`() {
+    fun `ring muted through a preset counts too`() {
+        val schedule = Schedule(
+            presets = mapOf(AudioStream.RING to listOf(Preset("Muted", 0))),
+            profiles = listOf(
+                Profile("Quiet", mapOf(AudioStream.RING to LevelSpec.PresetRef("Muted"), AudioStream.NOTIFICATION to LevelSpec.Raw(3))),
+            ),
+        )
+
+        assertIs<ValidationError.NotificationWhileRingMuted>(schedule.errors().single())
+    }
+
+    @Test
+    fun `muting ring with notification at zero or left unset is fine`() {
+        val schedule = Schedule(
+            profiles = listOf(
+                Profile("BothMuted", mapOf(AudioStream.RING to LevelSpec.Raw(0), AudioStream.NOTIFICATION to LevelSpec.Raw(0))),
+                Profile("RingMuted", mapOf(AudioStream.RING to LevelSpec.Raw(0))),
+            ),
+        )
+
+        assertEquals(emptyList(), schedule.errors())
+    }
+
+    @Test
+    fun `separate blocks muting ring and setting notification in the same minute are rejected`() {
         val schedule = Schedule(
             blocks = listOf(
-                block(start = at(9), target = single(AudioStream.MEDIA, 0)),
-                block(start = at(10), target = single(AudioStream.ALARM, 0)),
+                block(day = DayOfWeek.MONDAY, start = at(22), target = single(AudioStream.RING, 0)),
+                block(day = DayOfWeek.MONDAY, start = at(22), target = single(AudioStream.NOTIFICATION, 3)),
+            ),
+        )
+
+        val error = schedule.errors().single()
+        assertIs<ValidationError.NotificationWhileRingMuted>(error)
+        assertEquals("Monday 22:00", error.where)
+    }
+
+    @Test
+    fun `notification set later while ring is still muted is allowed`() {
+        // Android keeps the notification level and applies it once ring is
+        // unmuted; the runtime logs it as held rather than failed.
+        val schedule = Schedule(
+            blocks = listOf(
+                block(start = at(22), target = single(AudioStream.RING, 0)),
+                block(start = at(23), target = single(AudioStream.NOTIFICATION, 3)),
             ),
         )
 
@@ -64,8 +128,8 @@ class ValidationTest {
     @Test
     fun `preset levels are checked where they are declared`() {
         val schedule = Schedule(
-            presets = mapOf(AudioStream.RING to listOf(Preset("Silent", 0))),
-            blocks = listOf(block(target = presetRef(AudioStream.RING, "Silent"))),
+            presets = mapOf(AudioStream.ALARM to listOf(Preset("Silent", 0))),
+            blocks = listOf(block(target = presetRef(AudioStream.ALARM, "Silent"))),
         )
 
         assertIs<ValidationError.LevelTooLow>(schedule.errors().single())
@@ -190,7 +254,7 @@ class ValidationTest {
     fun `every problem is reported at once, not just the first`() {
         val schedule = Schedule(
             blocks = listOf(
-                block(day = DayOfWeek.MONDAY, start = at(9), target = single(AudioStream.RING, 0)),
+                block(day = DayOfWeek.MONDAY, start = at(9), target = single(AudioStream.ALARM, 0)),
                 block(day = DayOfWeek.TUESDAY, start = at(9), target = single(AudioStream.RING, 99)),
                 block(day = DayOfWeek.WEDNESDAY, start = at(9), target = Target.ProfileRef("Ghost")),
             ),

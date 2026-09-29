@@ -183,10 +183,15 @@ object VolumeScheduler {
     ) {
         val applier = VolumeApplier(context)
         log.append("$note  state: ${deviceState(context, applier)}")
-        levels.forEach { (stream, level) ->
+        // Stream order puts RING before NOTIFICATION, so unmuting the ringer
+        // and raising notifications in the same moment works.
+        levels.entries.sortedBy { it.key.ordinal }.forEach { (stream, level) ->
             var result = applier.apply(stream, level)
             var attempts = 1
-            while (retry && attempts < MAX_ATTEMPTS && result is ApplyResult.Applied && result.after != result.requested) {
+            while (
+                retry && attempts < MAX_ATTEMPTS && result is ApplyResult.Applied &&
+                result.after != result.requested && !heldByMutedRing(stream, applier)
+            ) {
                 Thread.sleep(RETRY_DELAY_MS)
                 result = applier.apply(stream, level)
                 attempts++
@@ -196,7 +201,12 @@ object VolumeScheduler {
                     log.append(
                         "$note  $stream ${result.before} -> ${result.after}" +
                             (if (result.clamped) " (clamped from $level)" else "") +
-                            (if (result.after != result.requested) "  DID NOT STICK, asked for ${result.requested}" else "") +
+                            when {
+                                result.after == result.requested -> ""
+                                heldByMutedRing(stream, applier) ->
+                                    "  muted with ring, asked for ${result.requested} (applies when ring is unmuted)"
+                                else -> "  DID NOT STICK, asked for ${result.requested}"
+                            } +
                             (if (attempts > 1) "  [attempt $attempts]" else ""),
                     )
 
@@ -205,6 +215,14 @@ object VolumeScheduler {
             }
         }
     }
+
+    /**
+     * While the ringer is muted Android mutes notifications too and reports
+     * their level as 0, so a notification change can't show until ring is
+     * unmuted. Expected, not a failure, and not worth retrying.
+     */
+    private fun heldByMutedRing(stream: AudioStream, applier: VolumeApplier): Boolean =
+        stream == AudioStream.NOTIFICATION && applier.currentLevel(AudioStream.RING) == 0
 
     /**
      * Screen, lock, Doze, charging, Do Not Disturb and ringer state, so a change

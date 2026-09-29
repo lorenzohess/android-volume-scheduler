@@ -103,11 +103,13 @@ UI, widget, and scheduler.
 
 ### Validation on save
 
-- Ring and notification levels clamp to a **minimum of 1**. Enforced when
-  a preset or raw level is created, so the scheduler never encounters the
-  case. Level 0 on those streams is how Android enters vibrate/silent,
-  which needs `ACCESS_NOTIFICATION_POLICY` — this rule is what lets the
-  app ship with no runtime permissions at all.
+- ~~Ring and notification clamp to a minimum of 1, because level 0 needs
+  `ACCESS_NOTIFICATION_POLICY`.~~ Revised after M5: only the *silent* ringer
+  mode needs that. Ring at 0 switches to vibrate, which needs no permission,
+  so ring and notification now go down to 0. Android mutes notifications
+  while the ringer is muted, so a moment that mutes ring while setting
+  notification above 0 is rejected (one error per profile, or per minute for
+  separate blocks). Alarm clamps to a minimum of 1, Android's own floor.
 - Levels clamp to `getStreamMaxVolume(stream)`, read at validation time.
 - Reject unknown preset/profile names (dangling refs after a rename).
 - Reject two events for the same stream at the same minute.
@@ -227,9 +229,9 @@ Empty Compose app, USB sideload working, a repeatable install command.
 **M2 — Four sliders, immediate apply.**
 Read `getStreamMinVolume`/`getStreamMaxVolume` per stream, show `5/7`
 style labels, apply on drag.
-*Done when:* all four streams move independently, and ring/notification
-refuse to go below 1. Confirms the device's independent-notification
-behaviour first-hand.
+*Done when:* all four streams move independently. Confirms the device's
+independent-notification behaviour first-hand. (Originally also "ring and
+notification refuse to go below 1"; see §2 for why that floor was dropped.)
 
 **M3 — The risky core, on fake data.**
 Hardcoded event list. Single-alarm arm/fire/re-arm loop, all receivers
@@ -270,7 +272,7 @@ M1–M3 hold all the unknowns. M4–M7 are ordinary app work.
 | Doze delays or drops alarms | Event log with intended-vs-actual timestamps from M3; escalate to battery exemption, then `setAlarmClock` |
 | Overnight reboot never reconciles | Direct-boot-aware receiver + device-protected storage; test by rebooting and leaving locked overnight |
 | Notification/ring linked despite expectations | Verified directly at M2, before any scheduling exists |
-| Ring 0 throws `SecurityException` | Clamp to 1 at validation; the case never reaches the API |
+| Ring change throws `SecurityException` | Only when entering or leaving *silent* mode; ring 0 means vibrate. Caught and logged as REFUSED |
 | Midnight-crossing and week-wrap logic | Store as start + duration, allow spill into next day; JVM unit tests at M4 |
 | Sideload wipes alarms mid-development | `MY_PACKAGE_REPLACED` receiver from M3 |
 

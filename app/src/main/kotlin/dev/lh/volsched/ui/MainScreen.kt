@@ -197,10 +197,14 @@ fun MainScreen(onEditSchedule: () -> Unit) {
             style = MaterialTheme.typography.bodySmall,
         )
 
+        val ringMuted = levels[AudioStream.RING] == 0
+
         AudioStream.entries.forEach { stream ->
             val max = maxLevels[stream] ?: 1
             val min = stream.minLevel
             val level = levels[stream] ?: min
+            // Mirrors the system settings: notification is unavailable while ring is muted.
+            val heldByRing = stream == AudioStream.NOTIFICATION && ringMuted
 
             Column {
                 Row(
@@ -216,15 +220,17 @@ fun MainScreen(onEditSchedule: () -> Unit) {
                         applier.apply(stream, raw.roundToInt())
                         levels = applier.currentLevels()
                     },
+                    enabled = !heldByRing,
                     valueRange = min.toFloat()..max.toFloat(),
                     steps = (max - min - 1).coerceAtLeast(0),
                 )
-                if (min > 0) {
-                    Text(
-                        "Floor is $min: zero would switch the phone to vibrate/silent.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
+                val hint = when {
+                    heldByRing -> "Unavailable while ring is muted; returns to its level when ring is unmuted."
+                    stream == AudioStream.RING -> "0 mutes the ringer (vibrate) and notifications with it."
+                    min > 0 -> "Floor is $min: Android won't silence the alarm stream."
+                    else -> null
                 }
+                hint?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             }
         }
 

@@ -11,7 +11,7 @@ in [notes.md](notes.md).
 | Module | State |
 |---|---|
 | `:core` | Builds and passes **79 unit tests** on the JVM |
-| `:app` | Builds and installs (Pixel 10a, Android 17). M2 verified on device: sliders are independent (ring and notification are not linked), ring/notification floor at 1, volume keys sync. M3 verified: alarms fire and apply on time with the screen on, with the screen off and locked, after a reinstall, after a reboot before first unlock, and through 7 hours of deep Doze (14 of 14 firings, each delivered within 1 s). M4 and M7 import verified in passing: imported JSON schedules drove every change. M6 verified: the widget shows the live on/off state and its toggle works both ways. Export (M7) **not yet verified**; M5 in progress |
+| `:app` | Builds and installs (Pixel 10a, Android 17). M2 verified on device: sliders are independent (ring and notification are not linked), volume keys sync. Ring and notification at 0 (muting) not yet verified. M3 verified: alarms fire and apply on time with the screen on, with the screen off and locked, after a reinstall, after a reboot before first unlock, and through 7 hours of deep Doze (14 of 14 firings, each delivered within 1 s). M4 and M7 import verified in passing: imported JSON schedules drove every change. M6 verified: the widget shows the live on/off state and its toggle works both ways. Export (M7) **not yet verified**; M5 in progress |
 
 Treat the Android layer as a first draft until the checks under "Verifying it
 actually works" have passed on the device.
@@ -85,14 +85,20 @@ An overlap is only a warning. A block acts when it starts; its end does
 nothing. So in the sample, Saturday's one-off MEDIA 20 from 13:00 to 16:00
 leaves media at 20 until Sleep at 23:30, not until 16:00.
 
-Import is strict: unknown keys, dangling preset or profile names, levels above
-the device maximum, two events touching the same stream in the same minute, and
-ring or notification levels below 1 are all rejected with a message rather than
-half-applied.
+Import is strict: unknown keys, dangling preset or profile names, levels
+outside the device's range, two events touching the same stream in the same
+minute, and a moment that mutes ring while setting notification are all
+rejected with a message rather than half-applied.
 
-Ring and notification have a floor of 1 because level 0 is how Android enters
-vibrate/silent, and that transition needs `ACCESS_NOTIFICATION_POLICY`. Holding
-the floor at 1 is what lets this app ship with zero runtime permissions.
+**Muting.** RING at 0 mutes the ringer: Android switches to vibrate, and
+mutes notifications along with it. That's the "unavailable because ring is
+muted" in the system settings. So a profile or moment that mutes ring can't
+also set NOTIFICATION above 0; leave NOTIFICATION unset there and it returns to
+its own level when a later block unmutes ring. NOTIFICATION at 0 on its own is
+fine. Vibrate needs no permission. Fully silent (no vibration) would need Do Not
+Disturb access, which the app doesn't request; if you switch the phone to
+silent by hand, scheduled ring changes are refused and logged until you switch
+it back. ALARM can't go below 1, because Android won't silence the alarm stream.
 
 ## Verifying it actually works
 

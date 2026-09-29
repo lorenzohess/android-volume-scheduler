@@ -152,9 +152,10 @@ class CompileTest {
     }
 
     @Test
-    fun `clamp holds ring above silent but leaves media alone`() {
-        assertEquals(1, AudioStream.RING.clamp(0, maxLevel = 7))
-        assertEquals(0, AudioStream.MEDIA.clamp(0, maxLevel = 25))
+    fun `clamp lets ring reach zero but holds alarm at one`() {
+        assertEquals(0, AudioStream.RING.clamp(0, maxLevel = 7))
+        assertEquals(1, AudioStream.ALARM.clamp(0, maxLevel = 7))
+        assertEquals(0, AudioStream.MEDIA.clamp(-3, maxLevel = 25))
         assertEquals(7, AudioStream.RING.clamp(99, maxLevel = 7))
     }
 }

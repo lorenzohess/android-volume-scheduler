@@ -15,8 +15,9 @@
       WAKE_LOCK: keeps the CPU awake from the alarm to the end of that
       service's job, which a foreground service alone does not.
 
-      No ACCESS_NOTIFICATION_POLICY: ring and notification levels are clamped to
-      a minimum of 1, so the app never triggers a silent/vibrate transition.
+      No ACCESS_NOTIFICATION_POLICY: ring at 0 puts the ringer in vibrate, which
+      needs no permission. Only fully silent mode would, and the app never asks
+      for it.
       No POST_NOTIFICATIONS either: the service works without it, and its
       notification is deferred and normally never shown anyway.
     -->

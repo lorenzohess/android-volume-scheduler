@@ -23,9 +23,11 @@ sealed interface ApplyResult {
 /**
  * The only place this app touches AudioManager.
  *
- * Every write goes through [apply], which clamps first - validation should
- * already guarantee a safe level, but a value that slipped through would throw
- * SecurityException on ring or notification rather than just sounding wrong.
+ * Every write goes through [apply], which clamps first; validation should
+ * already guarantee a level in range. Ring at 0 puts the ringer in vibrate,
+ * which needs no permission. A ring change while the user has the phone in
+ * silent mode would need Do Not Disturb access, though: that SecurityException
+ * is caught and reported as [ApplyResult.Refused].
  */
 class VolumeApplier(context: Context) {
 

@@ -61,7 +61,7 @@ class ScheduleJsonTest {
 
     @Test
     fun `import reports validation errors rather than accepting them`() {
-        val bad = Schedule(blocks = listOf(block(target = single(AudioStream.RING, 0))))
+        val bad = Schedule(blocks = listOf(block(target = single(AudioStream.ALARM, 0))))
 
         val result = importSchedule(bad.toJson(), TestMaxLevels)
 

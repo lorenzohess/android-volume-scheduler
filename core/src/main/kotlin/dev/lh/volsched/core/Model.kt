@@ -28,14 +28,16 @@ enum class AudioStream {
     ;
 
     /**
-     * Lowest level this app will ever set.
+     * Lowest level this app will set, matching Android's own floors.
      *
-     * Ring and notification enter vibrate/silent at 0, and that transition
-     * requires ACCESS_NOTIFICATION_POLICY. Holding them at 1 is what keeps this
-     * app free of runtime permissions entirely (see PLAN.md section 2).
+     * RING at 0 mutes the ringer: Android switches to vibrate, which needs no
+     * permission, and mutes NOTIFICATION along with it until ring is unmuted
+     * (see [ValidationError.NotificationWhileRingMuted]). Fully silent mode,
+     * with no vibration, would need Do Not Disturb access; the app never asks
+     * for it. ALARM stops at 1 because Android won't silence the alarm stream.
      */
     val minLevel: Int
-        get() = if (this == RING || this == NOTIFICATION) 1 else 0
+        get() = if (this == ALARM) 1 else 0
 }
 
 /** A named volume level, scoped to one stream because each stream's maximum differs. */

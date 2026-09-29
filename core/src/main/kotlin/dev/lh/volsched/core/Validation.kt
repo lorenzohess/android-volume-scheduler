@@ -25,7 +25,19 @@ sealed interface ValidationError {
     data class LevelTooLow(val stream: AudioStream, val level: Int) : ValidationError {
         override val message =
             "$stream level $level is below the minimum of ${stream.minLevel}" +
-                if (stream.minLevel == 1) " (0 would trigger silent/vibrate, which needs DND access)" else ""
+                if (stream == AudioStream.ALARM) " (Android won't silence the alarm stream)" else ""
+    }
+
+    /**
+     * RING muted and NOTIFICATION above 0 at the same moment, in one profile
+     * ([where] = "Profile 'X'") or in separate blocks starting together
+     * ([where] = "Monday 22:00"). Android mutes notifications while the ringer
+     * is muted, so the notification level couldn't take effect.
+     */
+    data class NotificationWhileRingMuted(val where: String, val level: Int) : ValidationError {
+        override val message =
+            "$where mutes RING but sets NOTIFICATION to $level. Android mutes notifications while the " +
+                "ringer is muted; leave NOTIFICATION unset there and it returns to its level when ring is unmuted."
     }
 
     data class LevelTooHigh(val stream: AudioStream, val level: Int, val max: Int) : ValidationError {
@@ -106,8 +118,54 @@ fun Schedule.validate(maxLevels: Map<AudioStream, Int>): List<ValidationError> {
             }
     }
 
+    errors += notificationsOverMutedRing()
+
     return errors
 }
+
+/**
+ * Moments that mute RING yet set NOTIFICATION above 0. A profile doing so is
+ * reported once, by name, rather than once per block that uses it; separate
+ * blocks starting in the same minute are reported by day and time.
+ */
+private fun Schedule.notificationsOverMutedRing(): List<ValidationError> {
+    val errors = mutableListOf<ValidationError>()
+    val mutingProfiles = mutableSetOf<String>()
+
+    profiles.forEach { profile ->
+        notificationOverMutedRing(profile.slots)?.let { level ->
+            mutingProfiles += profile.name
+            errors += ValidationError.NotificationWhileRingMuted("Profile '${profile.name}'", level)
+        }
+    }
+
+    blocks.groupBy { it.day to it.start }
+        .filterValues { group ->
+            group.size > 1 && group.none { (it.target as? Target.ProfileRef)?.name in mutingProfiles }
+        }
+        .forEach { (moment, group) ->
+            val slots = group.fold(emptyMap<AudioStream, LevelSpec>()) { acc, block -> acc + slotsOf(block) }
+            notificationOverMutedRing(slots)?.let { level ->
+                val (day, start) = moment
+                errors += ValidationError.NotificationWhileRingMuted("${day.label()} $start", level)
+            }
+        }
+
+    return errors
+}
+
+/** The NOTIFICATION level if [slots] mute RING and set NOTIFICATION above 0, otherwise null. */
+private fun Schedule.notificationOverMutedRing(slots: Map<AudioStream, LevelSpec>): Int? {
+    val ring = slots[AudioStream.RING]?.let { levelOf(AudioStream.RING, it) }
+    val notification = slots[AudioStream.NOTIFICATION]?.let { levelOf(AudioStream.NOTIFICATION, it) }
+    return if (ring == 0 && notification != null && notification > 0) notification else null
+}
+
+private fun Schedule.slotsOf(block: Block): Map<AudioStream, LevelSpec> =
+    when (val target = block.target) {
+        is Target.Single -> mapOf(target.stream to target.spec)
+        is Target.ProfileRef -> profiles.firstOrNull { it.name == target.name }?.slots.orEmpty()
+    }
 
 private fun Schedule.checkSpec(
     stream: AudioStream,
